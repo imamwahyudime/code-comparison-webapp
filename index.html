@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Difference Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
+    <style>
+        /* Custom styles for diff view */
+        .diff-line {
+            padding: 2px 10px;
+            white-space: pre-wrap; /* Wrap long lines */
+            word-wrap: break-word; /* Break long words */
+            font-family: 'Courier New', Courier, monospace; /* Monospace font for code */
+            min-height: 1.5em; /* Ensure consistent line height */
+            line-height: 1.5;
+            display: flex; /* Use flexbox for alignment */
+            align-items: flex-start; /* Align items at the start */
+        }
+        .line-number {
+            min-width: 40px; /* Fixed width for line numbers */
+            text-align: right;
+            padding-right: 10px;
+            color: #888;
+            user-select: none; /* Prevent selecting line numbers */
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+        .line-content {
+            flex-grow: 1; /* Allow content to grow */
+        }
+        .diff-added {
+            background-color: #e6ffed; /* Light green background for added lines */
+        }
+        .diff-removed {
+            background-color: #ffeef0; /* Light red background for removed lines */
+        }
+        .diff-common {
+            background-color: #f8f9fa; /* Light gray for common lines */
+        }
+        /* Ensure textareas have a minimum height and are resizable */
+        textarea {
+            min-height: 200px;
+            resize: vertical; /* Allow vertical resizing */
+            font-family: 'Courier New', Courier, monospace;
+        }
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .diff-container {
+                flex-direction: column; /* Stack diff views vertically on small screens */
+            }
+            .diff-pane {
+                width: 100%; /* Full width for panes on small screens */
+            }
+            .input-container {
+                flex-direction: column; /* Stack textareas vertically */
+            }
+            .input-pane {
+                width: 100%; /* Full width for textareas */
+                margin-bottom: 1rem; /* Add space between textareas */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans p-4 md:p-8">
+
+    <div class="container mx-auto max-w-7xl bg-white p-6 rounded-lg shadow-lg">
+        <h1 class="text-2xl md:text-3xl font-bold mb-6 text-center text-gray-800">Code Difference Checker</h1>
+
+        <div class="input-container flex flex-col md:flex-row gap-4 mb-6">
+            <div class="input-pane w-full md:w-1/2">
+                <label for="text1" class="block text-sm font-medium text-gray-700 mb-1">Original Code:</label>
+                <textarea id="text1" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste the first block of code here..."></textarea>
+            </div>
+            <div class="input-pane w-full md:w-1/2">
+                <label for="text2" class="block text-sm font-medium text-gray-700 mb-1">Modified Code:</label>
+                <textarea id="text2" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste the second block of code here..."></textarea>
+            </div>
+        </div>
+
+        <div class="text-center mb-6">
+            <button id="compareBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-md shadow transition duration-150 ease-in-out">
+                Compare
+            </button>
+        </div>
+
+        <h2 class="text-xl md:text-2xl font-semibold mb-4 text-gray-700">Differences:</h2>
+        <div id="diffOutput" class="diff-container flex gap-4 border border-gray-300 rounded-md overflow-hidden bg-white">
+            <div id="diffLeft" class="diff-pane w-1/2 border-r border-gray-300 overflow-x-auto">
+                <div class="p-2 text-sm font-semibold bg-gray-100 border-b border-gray-300 sticky top-0">Original</div>
+                <div id="diffLeftContent">
+                    <p class="p-4 text-gray-500">Comparison results will appear here.</p>
+                </div>
+            </div>
+            <div id="diffRight" class="diff-pane w-1/2 overflow-x-auto">
+                 <div class="p-2 text-sm font-semibold bg-gray-100 border-b border-gray-300 sticky top-0">Modified</div>
+                 <div id="diffRightContent">
+                     <p class="p-4 text-gray-500">Comparison results will appear here.</p>
+                 </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const text1 = document.getElementById('text1');
+        const text2 = document.getElementById('text2');
+        const compareBtn = document.getElementById('compareBtn');
+        const diffLeftContent = document.getElementById('diffLeftContent');
+        const diffRightContent = document.getElementById('diffRightContent');
+
+        // Function to render the diff view
+        function renderDiff(diffResults) {
+            // Clear previous results
+            diffLeftContent.innerHTML = '';
+            diffRightContent.innerHTML = '';
+
+            let leftLineNum = 1;
+            let rightLineNum = 1;
+
+            // Iterate through the diff results provided by jsdiff
+            diffResults.forEach(part => {
+                const lines = part.value.split('\n');
+                // Handle the last empty line split artifact
+                if (lines[lines.length - 1] === '') {
+                    lines.pop();
+                }
+
+                lines.forEach((line, index) => {
+                    const isLastLineOfPart = index === lines.length - 1;
+
+                    // Create div elements for the line in both panes
+                    const leftDiv = document.createElement('div');
+                    const rightDiv = document.createElement('div');
+                    leftDiv.classList.add('diff-line');
+                    rightDiv.classList.add('diff-line');
+
+                    // Create spans for line numbers and content
+                    const leftNumSpan = document.createElement('span');
+                    leftNumSpan.classList.add('line-number');
+                    const leftContentSpan = document.createElement('span');
+                    leftContentSpan.classList.add('line-content');
+                    leftContentSpan.textContent = line; // Use textContent to prevent XSS
+
+                    const rightNumSpan = document.createElement('span');
+                    rightNumSpan.classList.add('line-number');
+                    const rightContentSpan = document.createElement('span');
+                    rightContentSpan.classList.add('line-content');
+                    rightContentSpan.textContent = line; // Use textContent to prevent XSS
+
+                    // Style lines based on whether they were added, removed, or are common
+                    if (part.added) {
+                        // Line added (show in right pane, empty in left)
+                        rightDiv.classList.add('diff-added');
+                        rightNumSpan.textContent = rightLineNum++;
+                        rightContentSpan.textContent = line || ' '; // Ensure content is displayed
+                        rightDiv.appendChild(rightNumSpan);
+                        rightDiv.appendChild(rightContentSpan);
+
+                        leftDiv.classList.add('diff-removed', 'opacity-50'); // Dimmed placeholder on left
+                        leftNumSpan.textContent = ''; // No line number
+                        leftContentSpan.textContent = ' '; // Empty content
+                        leftDiv.appendChild(leftNumSpan);
+                        leftDiv.appendChild(leftContentSpan);
+
+                    } else if (part.removed) {
+                        // Line removed (show in left pane, empty in right)
+                        leftDiv.classList.add('diff-removed');
+                        leftNumSpan.textContent = leftLineNum++;
+                        leftContentSpan.textContent = line || ' '; // Ensure content is displayed
+                        leftDiv.appendChild(leftNumSpan);
+                        leftDiv.appendChild(leftContentSpan);
+
+                        rightDiv.classList.add('diff-added', 'opacity-50'); // Dimmed placeholder on right
+                        rightNumSpan.textContent = ''; // No line number
+                        rightContentSpan.textContent = ' '; // Empty content
+                        rightDiv.appendChild(rightNumSpan);
+                        rightDiv.appendChild(rightContentSpan);
+
+                    } else {
+                        // Common line (show in both panes)
+                        leftDiv.classList.add('diff-common');
+                        leftNumSpan.textContent = leftLineNum++;
+                        leftDiv.appendChild(leftNumSpan);
+                        leftDiv.appendChild(leftContentSpan);
+
+                        rightDiv.classList.add('diff-common');
+                        rightNumSpan.textContent = rightLineNum++;
+                        rightDiv.appendChild(rightNumSpan);
+                        rightDiv.appendChild(rightContentSpan);
+                    }
+
+                    // Append the line divs to their respective content areas
+                    diffLeftContent.appendChild(leftDiv);
+                    diffRightContent.appendChild(rightDiv);
+
+                    // Add newline character back if it wasn't the last line of the part
+                    // This helps maintain structure if the original value had trailing newlines
+                    if (!isLastLineOfPart && part.value.includes('\n')) {
+                       // This logic might need refinement based on how jsdiff handles trailing newlines
+                    }
+                });
+                 // Handle case where the part itself ends with a newline but wasn't split
+                 if (part.value.endsWith('\n') && lines.length === 0) {
+                     // This case handles single newline differences, similar logic as above
+                    const leftDiv = document.createElement('div');
+                    const rightDiv = document.createElement('div');
+                    leftDiv.classList.add('diff-line');
+                    rightDiv.classList.add('diff-line');
+                    const leftNumSpan = document.createElement('span'); leftNumSpan.classList.add('line-number');
+                    const leftContentSpan = document.createElement('span'); leftContentSpan.classList.add('line-content'); leftContentSpan.textContent = ' ';
+                    const rightNumSpan = document.createElement('span'); rightNumSpan.classList.add('line-number');
+                    const rightContentSpan = document.createElement('span'); rightContentSpan.classList.add('line-content'); rightContentSpan.textContent = ' ';
+
+                     if (part.added) {
+                        rightDiv.classList.add('diff-added');
+                        rightNumSpan.textContent = rightLineNum++;
+                        rightDiv.appendChild(rightNumSpan); rightDiv.appendChild(rightContentSpan);
+                        leftDiv.classList.add('diff-removed', 'opacity-50');
+                        leftDiv.appendChild(leftNumSpan); leftDiv.appendChild(leftContentSpan);
+                     } else if (part.removed) {
+                        leftDiv.classList.add('diff-removed');
+                        leftNumSpan.textContent = leftLineNum++;
+                        leftDiv.appendChild(leftNumSpan); leftDiv.appendChild(leftContentSpan);
+                        rightDiv.classList.add('diff-added', 'opacity-50');
+                        rightDiv.appendChild(rightNumSpan); rightDiv.appendChild(rightContentSpan);
+                     } else {
+                        leftDiv.classList.add('diff-common');
+                        leftNumSpan.textContent = leftLineNum++;
+                        leftDiv.appendChild(leftNumSpan); leftDiv.appendChild(leftContentSpan);
+                        rightDiv.classList.add('diff-common');
+                        rightNumSpan.textContent = rightLineNum++;
+                        rightDiv.appendChild(rightNumSpan); rightDiv.appendChild(rightContentSpan);
+                     }
+                     diffLeftContent.appendChild(leftDiv);
+                     diffRightContent.appendChild(rightDiv);
+                 }
+            });
+
+            // If no differences, show a message
+            if (diffResults.length === 1 && !diffResults[0].added && !diffResults[0].removed) {
+                 diffLeftContent.innerHTML = '<p class="p-4 text-green-600 font-semibold">No differences found.</p>';
+                 diffRightContent.innerHTML = '<p class="p-4 text-green-600 font-semibold">No differences found.</p>';
+            } else if (diffResults.length === 0) {
+                 // Handle case where both inputs are empty
+                 diffLeftContent.innerHTML = '<p class="p-4 text-gray-500">Both inputs are empty.</p>';
+                 diffRightContent.innerHTML = '<p class="p-4 text-gray-500">Both inputs are empty.</p>';
+            }
+        }
+
+        // Add event listener to the compare button
+        compareBtn.addEventListener('click', () => {
+            const str1 = text1.value;
+            const str2 = text2.value;
+
+            // Use jsdiff to find differences line by line
+            // Using diffLines for better side-by-side alignment based on lines
+            const diffResults = Diff.diffLines(str1, str2, { newlineIsToken: true });
+
+            // Render the differences
+            renderDiff(diffResults);
+        });
+
+        // Optional: Add initial example text
+        text1.value = `function greet(name) {
+  console.log("Hello, " + name + "!");
+}
+
+greet("World");
+// This is the original version.`;
+
+        text2.value = `function greet(name, punctuation) {
+  // Added punctuation parameter
+  console.log("Hello, " + name + punctuation);
+}
+
+greet("World", "!");
+// This is the modified version.`;
+
+    </script>
+
+</body>
+</html>
